@@ -4,7 +4,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"gopkg.in/ini.v1"
-	"math/rand"
 	"net"
 	"time"
 )
@@ -13,7 +12,6 @@ type Context struct {
 	tunName string
 	global bool
 	blocked DomainTrie
-	poisoned DomainTrie
 	blockedIp AddressQueue
 	normalIp AddressQueue
 	queryList *QueryList
@@ -22,7 +20,6 @@ type Context struct {
 	phantomAddr net.IP
 	fastDNS net.IP
 	cleanDNS net.IP
-	testDNS net.IP
 	tunTap TunTap
 	tunnel Tunnel
 }
@@ -45,7 +42,6 @@ func startClient(tunName string, common, client *ini.Section) {
 		tun.Name(),
 		global,
 		NewDomainTrie("blocked.txt"),
-		NewPoisonedDomain("poisoned.txt"),
 		NewAddressQueueWithPersistence("blocked_records.txt"),
 		NewAddressQueue(),
 		NewQueryList(),
@@ -54,28 +50,12 @@ func startClient(tunName string, common, client *ini.Section) {
 		net.ParseIP(client.Key("phantom_addr").String()),
 		net.ParseIP(client.Key("fast_dns").String()),
 		net.ParseIP(client.Key("clean_dns").String()),
-		net.ParseIP(client.Key("test_dns").String()),
 		tun,
 		udp,
 	}
 
 	tun.SetHandler(func (_ TunTap, content []byte) { ctx.cliDeviceReceived(tun, udp, content) })
 	udp.SetHandler(func (_ Tunnel, content []byte) { ctx.cliTunnelReceived(tun, udp, content) })
-}
-
-func (ctx *Context) testDomainPoisoned(packet gopacket.Packet) {
-	copied := make([]byte, len(packet.Data()))
-	copy(copied, packet.Data())
-
-	packet = gopacket.NewPacket(packet.Data(), layers.LayerTypeIPv4, gopacket.Default)
-	ipv4 := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-	dnsLayer := packet.Layer(layers.LayerTypeDNS).(*layers.DNS)
-
-	ipv4.DstIP = copyIP(ctx.testDNS)
-	dnsLayer.ID = uint16(rand.Uint32())
-	ctx.tryChangeSrc(packet)
-
-	ctx.tunTap.Send(updateChecksum(packet))
 }
 
 func (ctx *Context) isViaTunnel(packet gopacket.Packet) (bool, bool) {
@@ -114,13 +94,8 @@ func (ctx *Context) isViaTunnel(packet gopacket.Packet) (bool, bool) {
 				Info.Printf("%v is blocked\n", qName)
 				modified := ctx.queryList.ChangeToServer(dnsLayer.ID, packet.TransportLayer(), ipv4, ctx.cleanDNS)
 				return true, modified
-			} else if ctx.poisoned.Test(qName) {
-				Info.Printf("%v is poisoned\n", qName)
-				modified := ctx.queryList.ChangeToServer(dnsLayer.ID, packet.TransportLayer(), ipv4, ctx.cleanDNS)
-				return true, modified
 			} else {
 				Info.Printf("%v is ok\n", qName)
-				ctx.testDomainPoisoned(packet)
 			}
 		}
 		modified := ctx.queryList.ChangeToServer(dnsLayer.ID, packet.TransportLayer(), ipv4, ctx.fastDNS)
@@ -213,20 +188,7 @@ func (ctx *Context) cliDeviceReceived(t TunTap, udp Tunnel, content []byte) {
 	if restored {
 		// packet modified to fast dns must come from phantom address
 		has, skip := hasIPv4DNSLayer(packet, func(ipv4 *layers.IPv4, dns *layers.DNS) bool {
-			if ctx.testDNS.Equal(ipv4.SrcIP) {
-				for _, q := range dns.Questions {
-					if q.Type == layers.DNSTypeA {
-						qName := string(q.Name)
-						if !ctx.blocked.Test(qName) && !ctx.poisoned.Test(qName) {
-							Info.Printf("%v has been poisoned\n", qName)
-							ctx.poisoned.Add(qName)
-							return true
-						}
-					}
-				}
-			} else {
-				ctx.queryList.RestoreDnsSource(dns.ID, packet.TransportLayer(), ipv4)
-			}
+			ctx.queryList.RestoreDnsSource(dns.ID, packet.TransportLayer(), ipv4)
 			return false
 		})
 		if !has || !skip {

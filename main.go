@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"gopkg.in/ini.v1"
+	"runtime"
 )
 
 var (
@@ -46,12 +47,14 @@ func main() {
 	tunDevice := cfg.Section("common").Key("tun_device").String()
 	fmt.Printf("tun: %s\n", tunDevice)
 
+	fmt.Printf("Runtime OS: %s\n", runtime.GOOS)
 	if clientMode {
 		startClient(tunDevice, cfg.Section("common"), cfg.Section("client"))
 	} else {
 		startServer(tunDevice, cfg.Section("common"), cfg.Section("server"))
 	}
 
+	//go metrics.Log(metrics.DefaultRegistry, 5 * time.Second, log.New(os.Stderr, "metrics: ", log.Lmicroseconds))
 
 	q := make(chan int)
 	_ = <- q

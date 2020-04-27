@@ -1,16 +1,43 @@
 package main
 
 import (
+	"golang.org/x/net/ipv4"
 	"net"
 	"strconv"
+	"sync/atomic"
+	"syscall"
+	"unsafe"
 )
 
+var rawTxLength = 64
+var rawRxLength = 64
+
 type RawTunnelImpl struct {
+	protocol uint8
 	sendCh chan []byte
 	handler func (Tunnel, []byte)
-	conn *net.IPConn
+	conn *ipv4.PacketConn
 	destination *net.IPAddr
 	preConnected bool
+}
+
+func newIPAddr() *net.IPAddr {
+	return &net.IPAddr{ IP: net.ParseIP("::") }
+}
+
+func dupIPAddr(dst, src *net.IPAddr) {
+	copy(dst.IP, src.IP.To16())
+	dst.Zone = src.Zone
+}
+
+func equalIPAddr(l, r *net.IPAddr) bool {
+	if l == nil && r == nil {
+		return true
+	}
+	if l == nil || r == nil {
+		return false
+	}
+	return l.IP.Equal(r.IP)
 }
 
 func initRawTunnel(protocol uint8, listen, connect *net.IPAddr) (Tunnel, error) {
@@ -24,12 +51,22 @@ func initRawTunnel(protocol uint8, listen, connect *net.IPAddr) (Tunnel, error) 
 	if err != nil {
 		return nil, err
 	}
+
 	err = conn.SetWriteBuffer(256 * 1024)
 	if err != nil {
 		return nil, err
 	}
-	sendCh := make(chan []byte, 50)
-	tunnel := RawTunnelImpl{ sendCh, nil, conn, connect, connect != nil }
+
+	sendCh := make(chan []byte, rawTxLength)
+
+	destination := connect
+	if destination == nil {
+		destination = newIPAddr()
+	}
+
+	tunnel := RawTunnelImpl{
+		protocol, sendCh, nil, ipv4.NewPacketConn(conn), destination, connect != nil,
+	}
 	go tunnel.send()
 	go tunnel.receive()
 	return &tunnel, nil
@@ -52,7 +89,7 @@ func RawListen(addr string, protocol uint8) (Tunnel, error) {
 }
 
 func (t *RawTunnelImpl) Send(content []byte) {
-	t.sendCh <- copyBytes(content)
+	t.sendCh <- t.obscure(content)
 }
 
 func (t *RawTunnelImpl) SetHandler(handler func (Tunnel, []byte)) {
@@ -78,51 +115,108 @@ func (t *RawTunnelImpl) restore(packet []byte) []byte {
 }
 
 func (t *RawTunnelImpl) send() {
+	messages := make([]ipv4.Message, rawTxLength)
+	for i := 0; i < len(messages); i++ {
+		messages[i].Buffers = [][]byte { nil }
+		if !t.preConnected {
+			messages[i].Addr = t.destination
+		}
+	}
+
 	for  {
+		count := 0
+		bytes := 0
+
 		toSend := <- t.sendCh
-		if t.destination == nil {
-			Warning.Printf("No destination, skip %v bytes\n", len(toSend))
+		messages[count].Buffers[0] = toSend
+		count++
+		bytes += len(toSend)
+	getToSendLoop:
+		for {
+			if count >= len(messages) {
+				break
+			}
+			select {
+			case toSend := <- t.sendCh:
+				messages[count].Buffers[0] = toSend
+				count++
+				bytes += len(toSend)
+			default:
+				break getToSendLoop
+			}
+		}
+
+		if t.destination.IP.IsUnspecified() {
+			Warning.Printf("No destination, skip %v bytes\n", bytes)
 			continue
 		}
-		var n int
-		var err error
-		if t.preConnected {
-			n, err = t.conn.Write(t.obscure(toSend))
-		} else {
-			n, err = t.conn.WriteTo(t.obscure(toSend), t.destination)
+
+		msgSent := 0
+		for msgSent < count {
+			n, err := t.conn.WriteBatch(messages[msgSent:count], 0)
+			if err != nil {
+				Error.Printf("Failed to send to %v, err: %v\n", t.destination, err)
+
+				conn, err := net.DialIP("ip4:" + strconv.Itoa(int(t.protocol)), nil, t.destination)
+				if err != nil {
+					Error.Printf("Failed to re-dial to %v, err: %v\n", t.destination, err)
+					break
+				}
+				n = 0
+				old := atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&t.conn)), unsafe.Pointer(ipv4.NewPacketConn(conn)))
+				err = (*ipv4.PacketConn)(old).Close()
+				if err != nil {
+					Error.Printf("Failed to close old connection to %v, err: %v\n", t.destination, err)
+				}
+			}
+			msgSent += n
 		}
-		if err != nil {
-			Error.Printf("udp failed to send %d bytes, err: %v\n", len(toSend), err)
-			continue
-		}
-		Debug.Printf("sent to %v %d bytes\n", t.destination, n)
+		Debug.Printf("sent to %v %d bytes\n", t.destination, bytes)
 	}
 }
 
 func (t *RawTunnelImpl) receive() {
-	buffer := make([]byte, 65536)
+	messages := make([]ipv4.Message, rawRxLength)
+	for i := 0; i < len(messages); i++ {
+		messages[i].Buffers = [][]byte { make([]byte, 2048) }
+		messages[i].N = len(messages[i].Buffers[0])
+	}
 	for {
-		n, remoteAddr, err := t.conn.ReadFromIP(buffer)
+		n, err := t.conn.ReadBatch(messages[:], syscall.MSG_WAITFORONE)
 		if err != nil {
 			Error.Printf("Failed to receive, err: %v\n", err)
 			continue
 		}
-		if !equalIPAddr(remoteAddr, t.destination) {
-			if t.preConnected {
-				Error.Printf("cannot change destination from %v to %v\n", t.destination, remoteAddr)
-			} else {
-				Info.Printf("tunnel destination changed from %v to %v\n", t.destination, remoteAddr)
-				t.destination = remoteAddr
-			}
-		}
-		Debug.Printf("received from %v %v bytes\n", remoteAddr, n)
+
 		if t.handler == nil {
-			Warning.Printf("no receive handler set, ignored %d bytes", n)
-		} else {
-			received := t.restore(buffer[:n])
+			Warning.Printf("no receive handler set, ignored %d * N bytes", n)
+			continue
+		}
+
+		for i := 0; i < n; i++ {
+			msg := &messages[i]
+			remoteAddr := msg.Addr.(*net.IPAddr)
+			if !equalIPAddr(remoteAddr, t.destination) {
+				if t.preConnected {
+					Error.Printf("cannot change destination from %v to %v\n", t.destination, remoteAddr)
+					break
+				} else {
+					Info.Printf("tunnel destination changed from %v to %v\n", t.destination, remoteAddr)
+					dupIPAddr(t.destination, remoteAddr)
+				}
+			}
+			if len(msg.Buffers) != 1 {
+				Error.Printf("Bad msg Buffers size: %d, Flags: %d\n", len(msg.Buffers), msg.Flags)
+				continue
+			}
+			received := t.restore(msg.Buffers[0][20:msg.N])
 			if received != nil {
 				t.handler(t, received)
 			}
+
+			Debug.Printf("received from %v %d bytes\n", remoteAddr, msg.N)
+			msg.N = len(msg.Buffers[0])
 		}
 	}
 }
+

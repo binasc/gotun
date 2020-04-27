@@ -17,26 +17,6 @@ func copyBytes(content []byte) []byte {
 	return dup
 }
 
-func equalIPAddr(l, r *net.IPAddr) bool {
-	if l == nil && r == nil {
-		return true
-	}
-	if l == nil || r == nil {
-		return false
-	}
-	return l.IP.Equal(r.IP)
-}
-
-func equalUDPAddr(l, r *net.UDPAddr) bool {
-	if l == nil && r == nil {
-		return true
-	}
-	if l == nil || r == nil {
-		return false
-	}
-	return l.IP.Equal(r.IP) && l.Port == r.Port
-}
-
 func UpdateIpv4Checksum(ipv4 *layers.IPv4) {
 	bytes := ipv4.Contents
 
