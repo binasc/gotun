@@ -5,6 +5,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"gopkg.in/ini.v1"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type Context struct {
 	phantomAddr net.IP
 	fastDNS net.IP
 	cleanDNS net.IP
+	localDNS net.IP
 	tunTap TunTap
 	tunnel Tunnel
 }
@@ -50,6 +52,7 @@ func startClient(tunName string, common, client *ini.Section) {
 		net.ParseIP(client.Key("phantom_addr").String()),
 		net.ParseIP(client.Key("fast_dns").String()),
 		net.ParseIP(client.Key("clean_dns").String()),
+		net.ParseIP(client.Key("local_dns").String()),
 		tun,
 		udp,
 	}
@@ -90,7 +93,11 @@ func (ctx *Context) isViaTunnel(packet gopacket.Packet) (bool, bool) {
 				continue
 			}
 			qName := string(q.Name)
-			if ctx.blocked.Test(qName) {
+			if strings.HasSuffix(qName, ".lan.") || strings.HasSuffix(qName, ".lan") {
+				Info.Printf("%v is local\n", qName)
+				modified := ctx.queryList.ChangeToServer(dnsLayer.ID, packet.TransportLayer(), ipv4, ctx.localDNS)
+				return false, modified
+			} else if ctx.blocked.Test(qName) {
 				Info.Printf("%v is blocked\n", qName)
 				modified := ctx.queryList.ChangeToServer(dnsLayer.ID, packet.TransportLayer(), ipv4, ctx.cleanDNS)
 				return true, modified
