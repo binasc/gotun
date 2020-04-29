@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/fsnotify/fsnotify"
 	"gopkg.in/ini.v1"
 	"runtime"
 )
@@ -47,9 +48,15 @@ func main() {
 	tunDevice := cfg.Section("common").Key("tun_device").String()
 	fmt.Printf("tun: %s\n", tunDevice)
 
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		fmt.Println("Failed to get file watcher", err)
+	}
+	defer watcher.Close()
+
 	fmt.Printf("Runtime OS: %s\n", runtime.GOOS)
 	if clientMode {
-		startClient(tunDevice, cfg.Section("common"), cfg.Section("client"))
+		startClient(tunDevice, cfg.Section("common"), cfg.Section("client"), watcher)
 	} else {
 		startServer(tunDevice, cfg.Section("common"), cfg.Section("server"))
 	}

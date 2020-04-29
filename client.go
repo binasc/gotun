@@ -1,18 +1,20 @@
 package main
 
 import (
+	"github.com/fsnotify/fsnotify"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"gopkg.in/ini.v1"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 type Context struct {
 	tunName string
 	global bool
-	blocked DomainTrie
+	blocked atomic.Value
 	blockedIp AddressQueue
 	normalIp AddressQueue
 	queryList *QueryList
@@ -26,7 +28,7 @@ type Context struct {
 	tunnel Tunnel
 }
 
-func startClient(tunName string, common, client *ini.Section) {
+func startClient(tunName string, common, client *ini.Section, watcher *fsnotify.Watcher) {
 	udp, err := NewClientTunnel(common, client)
 	if err != nil {
 		Error.Printf("Failed to create client tunnel: %v\n", err)
@@ -43,7 +45,7 @@ func startClient(tunName string, common, client *ini.Section) {
 	ctx := Context{
 		tun.Name(),
 		global,
-		NewDomainTrie("blocked.txt"),
+		atomic.Value {},
 		NewAddressQueueWithPersistence("blocked_records.txt"),
 		NewAddressQueue(),
 		NewQueryList(),
@@ -57,8 +59,39 @@ func startClient(tunName string, common, client *ini.Section) {
 		udp,
 	}
 
+	ctx.blocked.Store(NewDomainTrie("blocked.txt"))
+
+	if err := watcher.Add("."); err != nil {
+		Error.Println("Failed to create watcher for blocked.txt", err)
+	}
+
+	go func() {
+		ctx.blockedFileWatcher(watcher)
+	}()
+
 	tun.SetHandler(func (_ TunTap, content []byte) { ctx.cliDeviceReceived(tun, udp, content) })
 	udp.SetHandler(func (_ Tunnel, content []byte) { ctx.cliTunnelReceived(tun, udp, content) })
+}
+
+func (ctx *Context) blockedFileWatcher(watcher *fsnotify.Watcher) {
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				Error.Println("Get watcher.Events chan not ok")
+			}
+			if event.Op & fsnotify.Write == fsnotify.Write {
+				if "blocked.txt" == event.Name || strings.HasSuffix(event.Name, "/blocked.txt") {
+					ctx.blocked.Store(NewDomainTrie("blocked.txt"))
+				}
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				Error.Println("Get watcher.Errors chan not ok")
+			}
+			Error.Println("Error happened when watching blocked.txt", err)
+		}
+	}
 }
 
 func (ctx *Context) isViaTunnel(packet gopacket.Packet) (bool, bool) {
@@ -97,7 +130,7 @@ func (ctx *Context) isViaTunnel(packet gopacket.Packet) (bool, bool) {
 				Info.Printf("%v is local\n", qName)
 				modified := ctx.queryList.ChangeToServer(dnsLayer.ID, packet.TransportLayer(), ipv4, ctx.localDNS)
 				return false, modified
-			} else if ctx.blocked.Test(qName) {
+			} else if ctx.blocked.Load().(DomainTrie).Test(qName) {
 				Info.Printf("%v is blocked\n", qName)
 				modified := ctx.queryList.ChangeToServer(dnsLayer.ID, packet.TransportLayer(), ipv4, ctx.cleanDNS)
 				return true, modified

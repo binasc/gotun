@@ -29,12 +29,15 @@ func NewDomainTrie(loadFromFile string) DomainTrie {
 }
 
 func readDomains(filename string, trie DomainTrie) {
+	count := 0
 	ReadLine(filename, func(line string) {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "#") {
 			trie.Add(line)
+			count++
 		}
 	})
+	Info.Printf("Load %v records from %v\n", count, filename)
 }
 
 func TruncateDomain(domain string) string {
