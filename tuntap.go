@@ -29,11 +29,7 @@ type Tun struct {
 func StartTun(tunName string) TunTap {
 	tun, err := water.New(water.Config{
 		DeviceType: water.TUN,
-		PlatformSpecificParams: water.PlatformSpecificParams {
-			Name: tunName,
-			Persist: true,
-			MultiQueue: true,
-		},
+		PlatformSpecificParams: PlatformSpecificParams(tunName),
 	})
 	if err != nil {
 		Error.Printf("Failed to create tun device: %s\n", err)

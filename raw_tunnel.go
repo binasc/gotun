@@ -5,7 +5,6 @@ import (
 	"net"
 	"strconv"
 	"sync/atomic"
-	"syscall"
 	"unsafe"
 )
 
@@ -182,7 +181,7 @@ func (t *RawTunnelImpl) receive() {
 		messages[i].N = len(messages[i].Buffers[0])
 	}
 	for {
-		n, err := t.conn.ReadBatch(messages[:], syscall.MSG_WAITFORONE)
+		n, err := t.conn.ReadBatch(messages[:], ReadBatchFlags)
 		if err != nil {
 			Error.Printf("Failed to receive, err: %v\n", err)
 			continue

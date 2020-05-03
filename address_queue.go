@@ -14,6 +14,8 @@ type AddressQueue interface {
 
 	TestIP(ip net.IP) bool
 
+	IPDomains(ip net.IP) []string
+
 }
 
 type AddressQueueImpl struct {
@@ -102,6 +104,24 @@ func (aq *AddressQueueImpl) TestIP(ip net.IP) bool {
 	key := binary.BigEndian.Uint32(ip.To4())
 	_, ok := aq.ip2DomainCount[key]
 	return ok
+}
+
+func (aq *AddressQueueImpl) IPDomains(ip net.IP) []string {
+	aq.lock.Lock()
+	defer aq.lock.Unlock()
+
+	key := binary.BigEndian.Uint32(ip.To4())
+	domainCount, ok := aq.ip2DomainCount[key]
+	if ok {
+		domains := make([]string, len(domainCount))
+		i := 0
+		for k := range domainCount {
+			domains[i] = k
+			i++
+		}
+		return domains
+	}
+	return []string {}
 }
 
 func (aq *AddressQueueImpl) copy() PriorityQueue {

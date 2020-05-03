@@ -26,6 +26,7 @@ type Context struct {
 	localDNS net.IP
 	tunTap TunTap
 	tunnel Tunnel
+	chinaIPList ChinaIPList
 }
 
 func startClient(tunName string, common, client *ini.Section, watcher *fsnotify.Watcher) {
@@ -57,6 +58,7 @@ func startClient(tunName string, common, client *ini.Section, watcher *fsnotify.
 		net.ParseIP(client.Key("local_dns").String()),
 		tun,
 		udp,
+		NewChinaIPList("china_ip_list.txt"),
 	}
 
 	ctx.blocked.Store(NewDomainTrie("blocked.txt"))
@@ -115,6 +117,10 @@ func (ctx *Context) isViaTunnel(packet gopacket.Packet) (bool, bool) {
 	}
 	if ctx.blockedIp.TestIP(ipv4.DstIP) {
 		Debug.Printf("ip: %v blocked\n", ipv4.DstIP)
+		if ctx.chinaIPList.TestIP(ipv4.DstIP) {
+			domains := ctx.blockedIp.IPDomains(ipv4.DstIP)
+			Info.Printf("ip: %v in china ip list but blocked by domains: %v\n", ipv4.DstIP, domains)
+		}
 		return true, false
 	}
 
@@ -140,6 +146,10 @@ func (ctx *Context) isViaTunnel(packet gopacket.Packet) (bool, bool) {
 		}
 		modified := ctx.queryList.ChangeToServer(dnsLayer.ID, packet.TransportLayer(), ipv4, ctx.fastDNS)
 		return false, modified
+	}
+	if ipv4.DstIP.IsGlobalUnicast() && !ctx.chinaIPList.TestIP(ipv4.DstIP) {
+		Debug.Printf("ip: %v not in china ip list\n", ipv4.DstIP)
+		return true, false
 	}
 	return false, false
 }

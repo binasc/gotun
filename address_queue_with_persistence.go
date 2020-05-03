@@ -27,6 +27,10 @@ type AddressQueueWithPersistenceImpl struct {
 
 }
 
+func (aq *AddressQueueWithPersistenceImpl) IPDomains(ip net.IP) []string {
+	return aq.addressQueue.IPDomains(ip)
+}
+
 func NewAddressQueueWithPersistence(filename string) AddressQueue {
 	ret := AddressQueueWithPersistenceImpl {
 		NewAddressQueue().(*AddressQueueImpl),
