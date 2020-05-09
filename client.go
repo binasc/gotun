@@ -16,7 +16,7 @@ type Context struct {
 	global bool
 	blocked atomic.Value
 	blockedIp AddressQueue
-	normalIp AddressQueue
+	skippedIp AddressSet
 	queryList *QueryList
 	remoteAddr net.IP
 	localAddr net.IP
@@ -48,7 +48,7 @@ func startClient(tunName string, common, client *ini.Section, watcher *fsnotify.
 		global,
 		atomic.Value {},
 		NewAddressQueueWithPersistence("blocked_records.txt"),
-		NewAddressQueue(),
+		NewAddressSet(client.Key("skipped_addresses").String()),
 		NewQueryList(),
 		net.ParseIP(client.Key("remote_addr").String()),
 		net.ParseIP(client.Key("local_addr").String()),
@@ -103,6 +103,9 @@ func (ctx *Context) isViaTunnel(packet gopacket.Packet) (bool, bool) {
 		return false, false
 	}
 	ipv4 := layer.(*layers.IPv4)
+	if ctx.skippedIp.Test(ipv4.DstIP) {
+		return false, false
+	}
 	if ipv4.Version == 6 {
 		return true, false
 	}
