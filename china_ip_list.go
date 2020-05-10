@@ -173,7 +173,7 @@ func (cil *ChinaIPListImpl) find(i, j int, target uint32) int {
 
 func (cil *ChinaIPListImpl) TestUint32(ip uint32) bool {
 	nearestIdx := cil.find(0, len(cil.items), ip)
-	if nearestIdx >= len(cil.items) {
+	if nearestIdx == -1 || nearestIdx >= len(cil.items) {
 		return false
 	}
 	nearest := cil.items[nearestIdx]

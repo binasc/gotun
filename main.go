@@ -45,8 +45,22 @@ func main() {
 		return
 	}
 
-	tunDevice := cfg.Section("common").Key("tun_device").String()
-	fmt.Printf("tun: %s\n", tunDevice)
+	var device TunTap
+	mode := cfg.Section("common").Key("mode").String()
+	name := cfg.Section("common").Key("device").String()
+	fmt.Printf("tuntap mode: %s, device: %s\n", mode, name)
+	if mode == "tun" {
+		device, err = StartTun(name)
+	} else if mode == "tap" {
+		device, err = StartTap(name)
+	} else {
+		fmt.Printf("Bad mode: %s\n", mode)
+		return
+	}
+	if err != nil {
+		fmt.Printf("Failed to create tun/tap device. %s\n", err)
+		return
+	}
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -56,9 +70,9 @@ func main() {
 
 	fmt.Printf("Runtime OS: %s\n", runtime.GOOS)
 	if clientMode {
-		startClient(tunDevice, cfg.Section("common"), cfg.Section("client"), watcher)
+		startClient(device, cfg.Section("common"), cfg.Section("client"), watcher)
 	} else {
-		startServer(tunDevice, cfg.Section("common"), cfg.Section("server"))
+		startServer(device, cfg.Section("common"), cfg.Section("server"))
 	}
 
 	//go metrics.Log(metrics.DefaultRegistry, 5 * time.Second, log.New(os.Stderr, "metrics: ", log.Lmicroseconds))

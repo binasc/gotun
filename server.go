@@ -4,15 +4,14 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-func startServer(tunName string, common, server *ini.Section) {
+func startServer(device TunTap, common, server *ini.Section) {
 	tunnel, err := NewServerTunnel(common, server)
 	if err != nil {
 		Error.Printf("Failed to start server tunnel: %v\n", err)
 		return
 	}
-	tun := StartTun(tunName)
-	tun.SetHandler(func (_ TunTap, content []byte) { svrDeviceReceived(tun, tunnel, content) })
-	tunnel.SetHandler(func (_ Tunnel, content []byte) { svrTunnelReceived(tun, tunnel, content) })
+	device.SetHandler(func (_ TunTap, content []byte) { svrDeviceReceived(device, tunnel, content) })
+	tunnel.SetHandler(func (_ Tunnel, content []byte) { svrTunnelReceived(device, tunnel, content) })
 
 	//f, err := os.Create("profiling")
 	//if err != nil {
@@ -32,6 +31,6 @@ func svrDeviceReceived(_ TunTap, tunnel Tunnel, content []byte) {
 	tunnel.Send(content)
 }
 
-func svrTunnelReceived(tun TunTap, _ Tunnel, content []byte) {
-	tun.Send(content)
+func svrTunnelReceived(device TunTap, _ Tunnel, content []byte) {
+	device.Send(content)
 }

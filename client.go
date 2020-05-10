@@ -12,7 +12,6 @@ import (
 )
 
 type Context struct {
-	tunName string
 	global bool
 	blocked atomic.Value
 	blockedIp AddressQueue
@@ -29,14 +28,12 @@ type Context struct {
 	chinaIPList ChinaIPList
 }
 
-func startClient(tunName string, common, client *ini.Section, watcher *fsnotify.Watcher) {
-	udp, err := NewClientTunnel(common, client)
+func startClient(tunTap TunTap, common, client *ini.Section, watcher *fsnotify.Watcher) {
+	tunnel, err := NewClientTunnel(common, client)
 	if err != nil {
 		Error.Printf("Failed to create client tunnel: %v\n", err)
 		return
 	}
-	tun := StartTun(tunName)
-
 	global, err := client.Key("global").Bool()
 	if err != nil {
 		Warning.Printf("Bad global config, %v\n", err)
@@ -44,7 +41,6 @@ func startClient(tunName string, common, client *ini.Section, watcher *fsnotify.
 	}
 
 	ctx := Context{
-		tun.Name(),
 		global,
 		atomic.Value {},
 		NewAddressQueueWithPersistence("blocked_records.txt"),
@@ -56,8 +52,8 @@ func startClient(tunName string, common, client *ini.Section, watcher *fsnotify.
 		net.ParseIP(client.Key("fast_dns").String()),
 		net.ParseIP(client.Key("clean_dns").String()),
 		net.ParseIP(client.Key("local_dns").String()),
-		tun,
-		udp,
+		tunTap,
+		tunnel,
 		NewChinaIPList("china_ip_list.txt"),
 	}
 
@@ -71,8 +67,8 @@ func startClient(tunName string, common, client *ini.Section, watcher *fsnotify.
 		ctx.blockedFileWatcher(watcher)
 	}()
 
-	tun.SetHandler(func (_ TunTap, content []byte) { ctx.cliDeviceReceived(tun, udp, content) })
-	udp.SetHandler(func (_ Tunnel, content []byte) { ctx.cliTunnelReceived(tun, udp, content) })
+	tunTap.SetHandler(func (_ TunTap, content []byte) { ctx.cliDeviceReceived(tunTap, tunnel, content) })
+	tunnel.SetHandler(func (_ Tunnel, content []byte) { ctx.cliTunnelReceived(tunTap, tunnel, content) })
 }
 
 func (ctx *Context) blockedFileWatcher(watcher *fsnotify.Watcher) {
@@ -235,7 +231,7 @@ func hasIPv4DNSLayer(packet gopacket.Packet, fn func(ipv4 *layers.IPv4, dns *lay
 	return false, false
 }
 
-func (ctx *Context) cliDeviceReceived(t TunTap, udp Tunnel, content []byte) {
+func (ctx *Context) cliDeviceReceived(device TunTap, tunnel Tunnel, content []byte) {
 	packet := gopacket.NewPacket(content, layers.LayerTypeIPv4, decodeOptions)
 	restored := ctx.tryRestoreDst(packet)
 	if restored {
@@ -245,7 +241,7 @@ func (ctx *Context) cliDeviceReceived(t TunTap, udp Tunnel, content []byte) {
 			return false
 		})
 		if !has || !skip {
-			t.Send(updateChecksum(packet))
+			device.Send(updateChecksum(packet))
 		}
 		return
 	}
@@ -254,23 +250,23 @@ func (ctx *Context) cliDeviceReceived(t TunTap, udp Tunnel, content []byte) {
 
 	if viaTunnel {
 		if modified {
-			udp.Send(updateChecksum(packet))
+			tunnel.Send(updateChecksum(packet))
 		} else {
-			udp.Send(content)
+			tunnel.Send(content)
 		}
 	} else {
 		changed := ctx.tryChangeSrc(packet)
 		if modified || changed {
-			t.Send(updateChecksum(packet))
+			device.Send(updateChecksum(packet))
 		} else {
-			t.Send(content)
+			device.Send(content)
 		}
 	}
 }
 
-func (ctx *Context) cliTunnelReceived(t TunTap, _ Tunnel, content []byte) {
+func (ctx *Context) cliTunnelReceived(device TunTap, _ Tunnel, content []byte) {
 	if ctx.global {
-		t.Send(content)
+		device.Send(content)
 		return
 	}
 	packet := gopacket.NewPacket(content, layers.LayerTypeIPv4, decodeOptions)
@@ -283,8 +279,8 @@ func (ctx *Context) cliTunnelReceived(t TunTap, _ Tunnel, content []byte) {
 		return ctx.queryList.RestoreDnsSource(dns.ID, packet.TransportLayer(), ipv4)
 	})
 	if has && modified {
-		t.Send(updateChecksum(packet))
+		device.Send(updateChecksum(packet))
 	} else {
-		t.Send(content)
+		device.Send(content)
 	}
 }

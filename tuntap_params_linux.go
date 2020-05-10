@@ -4,9 +4,9 @@ import (
 	"github.com/songgao/water"
 )
 
-func PlatformSpecificParams(tunName string) water.PlatformSpecificParams {
+func PlatformSpecificParams(name string) water.PlatformSpecificParams {
 	return water.PlatformSpecificParams {
-		Name: tunName,
+		Name: name,
 		Persist: true,
 		MultiQueue: true,
 	}

@@ -26,7 +26,10 @@ func NewAddressSet(addressList string) AddressSet {
 		make([]uint32, 0, 10),
 	}
 	for _, address := range strings.Split(addressList, ",") {
-		as.Add(net.ParseIP(strings.TrimSpace(address)))
+		trimmed := strings.TrimSpace(address)
+		if trimmed != "" {
+			as.Add(net.ParseIP(trimmed))
+		}
 	}
 	return as
 }

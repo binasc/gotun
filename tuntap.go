@@ -15,8 +15,7 @@ type TunTap interface {
 
 }
 
-
-type Tun struct {
+type TunTapImpl struct {
 
 	sendCh chan []byte
 
@@ -26,27 +25,34 @@ type Tun struct {
 
 }
 
-func StartTun(tunName string) TunTap {
-	tun, err := water.New(water.Config{
-		DeviceType: water.TUN,
-		PlatformSpecificParams: PlatformSpecificParams(tunName),
-	})
-	if err != nil {
-		Error.Printf("Failed to create tun device: %s\n", err)
-		return nil
-	}
-	Info.Printf("tun device %s created\n", tun.Name())
-	t := Tun{ make(chan []byte, 50), tun, nil }
-	go t.send()
-	go t.receive()
-	return &t
+func StartTun(tunName string) (TunTap, error) {
+	return startTunTap(water.TUN, tunName)
 }
 
-func (t *Tun) Send(content []byte) {
+func StartTap(tapName string) (TunTap, error) {
+	return startTunTap(water.TAP, tapName)
+}
+
+func startTunTap(deviceType water.DeviceType, name string) (TunTap, error) {
+	tun, err := water.New(water.Config{
+		DeviceType: deviceType,
+		PlatformSpecificParams: PlatformSpecificParams(name),
+	})
+	if err != nil {
+		return nil, err
+	}
+	Info.Printf("tun device %s created\n", tun.Name())
+	t := TunTapImpl{make(chan []byte, 50), tun, nil }
+	go t.send()
+	go t.receive()
+	return &t, nil
+}
+
+func (t *TunTapImpl) Send(content []byte) {
 	t.sendCh <- copyBytes(content)
 }
 
-func (t *Tun) send() {
+func (t *TunTapImpl) send() {
 	for  {
 		toSend := <- t.sendCh
 		n, err := t.device.Write(toSend)
@@ -58,11 +64,11 @@ func (t *Tun) send() {
 	}
 }
 
-func (t *Tun) SetHandler(handler func(TunTap, [] byte)) {
+func (t *TunTapImpl) SetHandler(handler func(TunTap, [] byte)) {
 	t.handler = handler
 }
 
-func (t *Tun) receive() {
+func (t *TunTapImpl) receive() {
 	buf := make([]byte, 1500)
 	for {
 		n, err := t.device.Read(buf)
@@ -80,6 +86,6 @@ func (t *Tun) receive() {
 	}
 }
 
-func (t *Tun) Name() string {
+func (t *TunTapImpl) Name() string {
 	return t.device.Name()
 }
