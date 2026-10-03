@@ -137,7 +137,14 @@ func (ctx *Context) cliDeviceReceived(device Tun, tunnel Tunnel, content []byte)
 	if version != 4 {
 		return
 	}
+	// A truncated IPv4 header may still produce a partially decoded layer.
+	if len(content) < 20 || int(content[0]&15)*4 < 20 || int(content[0]&15)*4 > len(content) {
+		return
+	}
 	packet := gopacket.NewPacket(content, layers.LayerTypeIPv4, decodeOptions)
+	if packet.Layer(layers.LayerTypeIPv4) == nil {
+		return
+	}
 	if ctx.tryRestoreDst(packet) {
 		device.Send(updateChecksum(packet))
 	} else if ctx.isViaTunnel(packet) {
