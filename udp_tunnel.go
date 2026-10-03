@@ -92,6 +92,10 @@ func (t *UDPTunnelImpl) Send(content []byte) {
 }
 
 func (t *UDPTunnelImpl) SetHandler(handler func(Tunnel, []byte)) {
+	if handler == nil {
+		t.handler.Store(nil)
+		return
+	}
 	t.handler.Store(&handler)
 }
 

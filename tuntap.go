@@ -62,6 +62,10 @@ func (t *TunTapImpl) send() {
 }
 
 func (t *TunTapImpl) SetHandler(handler func(TunTap, []byte)) {
+	if handler == nil {
+		t.handler.Store(nil)
+		return
+	}
 	t.handler.Store(&handler)
 }
 

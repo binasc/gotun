@@ -94,6 +94,10 @@ func (t *RawTunnelImpl) Send(content []byte) {
 }
 
 func (t *RawTunnelImpl) SetHandler(handler func(Tunnel, []byte)) {
+	if handler == nil {
+		t.handler.Store(nil)
+		return
+	}
 	t.handler.Store(&handler)
 }
 
