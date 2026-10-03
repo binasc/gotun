@@ -47,7 +47,7 @@ func (ctx *Context) isViaTunnel(packet gopacket.Packet) bool {
 	if dst.Equal(ctx.remoteAddr) {
 		return true
 	}
-	if !dst.IsGlobalUnicast() {
+	if dst.IsPrivate() || !dst.IsGlobalUnicast() {
 		return false
 	}
 	return ctx.global || !ctx.chinaIPList.TestIP(dst)
