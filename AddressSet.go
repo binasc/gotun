@@ -8,17 +8,13 @@ import (
 )
 
 type AddressSet interface {
-
 	Add(ip net.IP)
 
 	Test(ip net.IP) bool
-
 }
 
 type AddressSetImpl struct {
-
 	addresses []uint32
-
 }
 
 func NewAddressSet(addressList string) AddressSet {
@@ -49,13 +45,13 @@ func (as *AddressSetImpl) find(i, j int, target uint32) bool {
 	if i >= j {
 		return false
 	}
-	mid := i + (j - i) / 2
+	mid := i + (j-i)/2
 	if as.addresses[mid] == target {
 		return true
 	} else if target < as.addresses[mid] {
 		return as.find(i, mid, target)
 	}
-	return as.find(mid + 1, j, target)
+	return as.find(mid+1, j, target)
 }
 
 func (as *AddressSetImpl) ipToUint32(ip net.IP) uint32 {

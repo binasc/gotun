@@ -16,9 +16,9 @@ var (
 
 func init() {
 	const (
-		serverModeUsage         = "server mode"
-		clientModeUsage         = "client mode"
-		configFileUsage         = "config file"
+		serverModeUsage = "server mode"
+		clientModeUsage = "client mode"
+		configFileUsage = "config file"
 	)
 	flag.BoolVar(&serverMode, "s", false, serverModeUsage)
 	flag.BoolVar(&clientMode, "c", false, clientModeUsage)
@@ -78,6 +78,6 @@ func main() {
 	//go metrics.Log(metrics.DefaultRegistry, 5 * time.Second, log.New(os.Stderr, "metrics: ", log.Lmicroseconds))
 
 	q := make(chan int)
-	_ = <- q
+	_ = <-q
 	fmt.Println("bye")
 }

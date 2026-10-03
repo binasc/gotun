@@ -5,8 +5,8 @@ import (
 )
 
 func PlatformSpecificParams(tunName string) water.PlatformSpecificParams {
-	return water.PlatformSpecificParams {
-		Name: tunName,
+	return water.PlatformSpecificParams{
+		Name:   tunName,
 		Driver: water.MacOSDriverSystem,
 	}
 }

@@ -6,11 +6,9 @@ import (
 )
 
 type Tunnel interface {
-
 	Send(content []byte)
 
-	SetHandler(handler func (Tunnel, []byte))
-
+	SetHandler(handler func(Tunnel, []byte))
 }
 
 func NewClientTunnel(common, client *ini.Section) (Tunnel, error) {
@@ -52,4 +50,3 @@ func NewServerTunnel(common, server *ini.Section) (Tunnel, error) {
 		return nil, errors.New("bad server type: " + tunnelType)
 	}
 }
-

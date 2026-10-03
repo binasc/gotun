@@ -3,9 +3,9 @@ package main
 import "net"
 
 type Record struct {
-	ttl int64
+	ttl    int64
 	domain string
-	ip net.IP
+	ip     net.IP
 }
 
 type PriorityQueue []*Record
@@ -31,7 +31,7 @@ func (pq *PriorityQueue) Pop() interface{} {
 	old := *pq
 	n := len(old)
 	item := old[n-1]
-	old[n-1] = nil  // avoid memory leak
+	old[n-1] = nil // avoid memory leak
 	*pq = old[0 : n-1]
 	return item
 }

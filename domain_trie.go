@@ -5,23 +5,19 @@ import (
 )
 
 type DomainTrie interface {
-
 	Add(domain string)
 
 	Test(domain string) bool
-
 }
 
 type record []record
 
 type DomainTrieImpl struct {
-
 	root []record
-
 }
 
 func NewDomainTrie(loadFromFile string) DomainTrie {
-	ret := &DomainTrieImpl{ nil }
+	ret := &DomainTrieImpl{nil}
 	if loadFromFile != "" {
 		readDomains(loadFromFile, ret)
 	}

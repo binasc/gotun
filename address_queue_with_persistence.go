@@ -14,7 +14,6 @@ import (
 )
 
 type AddressQueueWithPersistenceImpl struct {
-
 	addressQueue *AddressQueueImpl
 
 	lock sync.Mutex
@@ -24,7 +23,6 @@ type AddressQueueWithPersistenceImpl struct {
 	persistFile string
 
 	lastSaved int64
-
 }
 
 func (aq *AddressQueueWithPersistenceImpl) IPDomains(ip net.IP) []string {
@@ -32,7 +30,7 @@ func (aq *AddressQueueWithPersistenceImpl) IPDomains(ip net.IP) []string {
 }
 
 func NewAddressQueueWithPersistence(filename string) AddressQueue {
-	ret := AddressQueueWithPersistenceImpl {
+	ret := AddressQueueWithPersistenceImpl{
 		NewAddressQueue().(*AddressQueueImpl),
 		sync.Mutex{},
 		sync.Mutex{},
@@ -126,7 +124,7 @@ func (aq *AddressQueueWithPersistenceImpl) Add(ttlMs int64, ip net.IP, domain st
 	defer aq.lock.Unlock()
 
 	now := time.Now().UnixNano()
-	if now - aq.lastSaved > 10 * time.Second.Nanoseconds() {
+	if now-aq.lastSaved > 10*time.Second.Nanoseconds() {
 		aq.lastSaved = now
 		copied := aq.addressQueue.copy()
 		if copied != nil && len(copied) > 0 {

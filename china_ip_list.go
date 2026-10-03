@@ -8,31 +8,25 @@ import (
 )
 
 type ChinaIPList interface {
-
 	Add(ipMasks []string)
 
 	TestUint32(ip uint32) bool
 
 	TestIP(ip net.IP) bool
-
 }
 
 type IPMask struct {
-
 	net uint32
 
 	mask uint8
-
 }
 
 type ChinaIPListImpl struct {
-
 	items []IPMask
-
 }
 
 func NewChinaIPList(loadFromFile string) ChinaIPList {
-	ret := &ChinaIPListImpl{ nil }
+	ret := &ChinaIPListImpl{nil}
 	if loadFromFile != "" {
 		ret.readIPMasks(loadFromFile)
 	}
@@ -72,7 +66,7 @@ func (cil *ChinaIPListImpl) parse(raw string) *IPMask {
 		Error.Printf("Bad Net: %v\n", raw)
 		return nil
 	}
-	return &IPMask{ ip, uint8(ones) }
+	return &IPMask{ip, uint8(ones)}
 }
 
 func (cil *ChinaIPListImpl) add(ipMask string) {
@@ -83,7 +77,7 @@ func (cil *ChinaIPListImpl) add(ipMask string) {
 	cil.items = append(cil.items, *cil.parse(ipMask))
 }
 
-var masks = []uint32 {
+var masks = []uint32{
 	0x00000000,
 	0x80000000,
 	0xc0000000,
@@ -124,7 +118,7 @@ func (cil *ChinaIPListImpl) mask(ip uint32, mask uint8) uint32 {
 }
 
 func (cil *ChinaIPListImpl) uint32ToIP(ip uint32) net.IP {
-	return net.IPv4(byte(ip >> 24), byte(ip >> 16 & 0xff), byte(ip >> 8 & 0xff), byte(ip & 0xff))
+	return net.IPv4(byte(ip>>24), byte(ip>>16&0xff), byte(ip>>8&0xff), byte(ip&0xff))
 }
 
 func (cil *ChinaIPListImpl) sort() {
@@ -162,13 +156,13 @@ func (cil *ChinaIPListImpl) find(i, j int, target uint32) int {
 	if i >= j {
 		return i - 1
 	}
-	mid := i + (j - i) / 2
+	mid := i + (j-i)/2
 	if cil.items[mid].net == target {
 		return mid
 	} else if target < cil.items[mid].net {
 		return cil.find(i, mid, target)
 	}
-	return cil.find(mid + 1, j, target)
+	return cil.find(mid+1, j, target)
 }
 
 func (cil *ChinaIPListImpl) TestUint32(ip uint32) bool {

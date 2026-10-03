@@ -9,13 +9,11 @@ import (
 )
 
 type AddressQueue interface {
-
 	Add(ttlMs int64, ip net.IP, domain string)
 
 	TestIP(ip net.IP) bool
 
 	IPDomains(ip net.IP) []string
-
 }
 
 type AddressQueueImpl struct {
@@ -60,7 +58,7 @@ func (aq *AddressQueueImpl) expire() {
 }
 
 func (aq *AddressQueueImpl) add(expiredAt int64, ip net.IP, domain string) {
-	heap.Push(&aq.pq, &Record {expiredAt, domain, copyIP(ip)})
+	heap.Push(&aq.pq, &Record{expiredAt, domain, copyIP(ip)})
 
 	ipVal := binary.BigEndian.Uint32(ip.To4())
 	if domainCount, ok := aq.ip2DomainCount[ipVal]; ok {
@@ -79,7 +77,7 @@ func (aq *AddressQueueImpl) Add(ttlMs int64, ip net.IP, domain string) {
 	aq.expire()
 
 	now := time.Now().UnixNano()
-	expiredAt := now + ttlMs * time.Millisecond.Nanoseconds()
+	expiredAt := now + ttlMs*time.Millisecond.Nanoseconds()
 	aq.add(expiredAt, ip, domain)
 }
 
@@ -89,7 +87,7 @@ func (aq *AddressQueueImpl) visit(ip net.IP) {
 	domain := "*"
 	if domainCount, ok := aq.ip2DomainCount[ipVal]; ok {
 		domainCount[domain] = 1
-		aq.validBefore[ipVal] = time.Now().UnixNano() + 300 * time.Second.Nanoseconds()
+		aq.validBefore[ipVal] = time.Now().UnixNano() + 300*time.Second.Nanoseconds()
 	}
 }
 
@@ -121,7 +119,7 @@ func (aq *AddressQueueImpl) IPDomains(ip net.IP) []string {
 		}
 		return domains
 	}
-	return []string {}
+	return []string{}
 }
 
 func (aq *AddressQueueImpl) copy() PriorityQueue {

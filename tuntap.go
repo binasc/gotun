@@ -3,26 +3,23 @@ package main
 import (
 	"github.com/songgao/water"
 	"os"
+	"sync/atomic"
 )
 
 type TunTap interface {
+	Send([]byte)
 
-	Send([] byte)
-
-	SetHandler(func (TunTap, []byte))
+	SetHandler(func(TunTap, []byte))
 
 	Name() string
-
 }
 
 type TunTapImpl struct {
-
 	sendCh chan []byte
 
 	device *water.Interface
 
-	handler func (TunTap, []byte)
-
+	handler atomic.Pointer[func(TunTap, []byte)]
 }
 
 func StartTun(tunName string) (TunTap, error) {
@@ -35,14 +32,14 @@ func StartTap(tapName string) (TunTap, error) {
 
 func startTunTap(deviceType water.DeviceType, name string) (TunTap, error) {
 	tun, err := water.New(water.Config{
-		DeviceType: deviceType,
+		DeviceType:             deviceType,
 		PlatformSpecificParams: PlatformSpecificParams(name),
 	})
 	if err != nil {
 		return nil, err
 	}
 	Info.Printf("tun device %s created\n", tun.Name())
-	t := TunTapImpl{make(chan []byte, 50), tun, nil }
+	t := TunTapImpl{sendCh: make(chan []byte, 50), device: tun}
 	go t.send()
 	go t.receive()
 	return &t, nil
@@ -53,8 +50,8 @@ func (t *TunTapImpl) Send(content []byte) {
 }
 
 func (t *TunTapImpl) send() {
-	for  {
-		toSend := <- t.sendCh
+	for {
+		toSend := <-t.sendCh
 		n, err := t.device.Write(toSend)
 		if err != nil {
 			Error.Printf("%s failed to send %d bytes, err: %v\n", t.Name(), len(toSend), err)
@@ -64,8 +61,8 @@ func (t *TunTapImpl) send() {
 	}
 }
 
-func (t *TunTapImpl) SetHandler(handler func(TunTap, [] byte)) {
-	t.handler = handler
+func (t *TunTapImpl) SetHandler(handler func(TunTap, []byte)) {
+	t.handler.Store(&handler)
 }
 
 func (t *TunTapImpl) receive() {
@@ -78,10 +75,11 @@ func (t *TunTapImpl) receive() {
 		}
 
 		Debug.Printf("received %v bytes from %s\n", n, t.Name())
-		if t.handler == nil {
+		handler := t.handler.Load()
+		if handler == nil {
 			Warning.Printf("no handler set, skip %d bytes", n)
 		} else {
-			t.handler(t, buf[:n])
+			(*handler)(t, buf[:n])
 		}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"golang.org/x/net/ipv4"
 	"net"
+	"sync/atomic"
 )
 
 var udpTxLength = 64
@@ -11,20 +12,20 @@ var udpRxLength = 64
 
 type UDPTunnelImpl struct {
 	sendCh       chan []byte
-	handler      func (Tunnel, []byte)
+	handler      atomic.Pointer[func(Tunnel, []byte)]
 	conn         *ipv4.PacketConn
-	destination  *net.UDPAddr
+	destination  atomic.Pointer[net.UDPAddr]
 	preConnected bool
 }
 
 func newUDPAddr() *net.UDPAddr {
-	return &net.UDPAddr{ IP: net.ParseIP("::"), Port: 0 }
+	return &net.UDPAddr{IP: net.ParseIP("::"), Port: 0}
 }
 
-func dupUDPAddr(dst, src *net.UDPAddr) {
-	copy(dst.IP, src.IP.To16())
-	dst.Port = src.Port
-	dst.Zone = src.Zone
+func copyUDPAddr(src *net.UDPAddr) *net.UDPAddr {
+	cloned := *src
+	cloned.IP = copyIP(src.IP)
+	return &cloned
 }
 
 func equalUDPAddr(l, r *net.UDPAddr) bool {
@@ -62,8 +63,9 @@ func initUDPTunnel(listen, connect *net.UDPAddr) (Tunnel, error) {
 	}
 
 	tunnel := UDPTunnelImpl{
-		sendCh, nil, ipv4.NewPacketConn(conn), destination, connect != nil,
+		conn: ipv4.NewPacketConn(conn), sendCh: sendCh, preConnected: connect != nil,
 	}
+	tunnel.destination.Store(copyUDPAddr(destination))
 	go tunnel.send()
 	go tunnel.receive()
 	return &tunnel, nil
@@ -89,12 +91,12 @@ func (t *UDPTunnelImpl) Send(content []byte) {
 	t.sendCh <- t.obscure(content)
 }
 
-func (t *UDPTunnelImpl) SetHandler(handler func (Tunnel, []byte)) {
-	t.handler = handler
+func (t *UDPTunnelImpl) SetHandler(handler func(Tunnel, []byte)) {
+	t.handler.Store(&handler)
 }
 
 func (t *UDPTunnelImpl) obscure(packet []byte) []byte {
-	ret, err := obscure(1492 - 20 - 8, packet)
+	ret, err := obscure(1492-20-8, packet)
 	if err != nil {
 		Error.Printf("Error when obscure packet: %v\n", err)
 		return nil
@@ -114,17 +116,14 @@ func (t *UDPTunnelImpl) restore(packet []byte) []byte {
 func (t *UDPTunnelImpl) send() {
 	messages := make([]ipv4.Message, udpTxLength)
 	for i := 0; i < len(messages); i++ {
-		messages[i].Buffers = [][]byte { nil }
-		if !t.preConnected {
-			messages[i].Addr = t.destination
-		}
+		messages[i].Buffers = [][]byte{nil}
 	}
 
 	for {
 		count := 0
 		bytes := 0
 
-		toSend := <- t.sendCh
+		toSend := <-t.sendCh
 		messages[count].Buffers[0] = toSend
 		count++
 		bytes += len(toSend)
@@ -134,7 +133,7 @@ func (t *UDPTunnelImpl) send() {
 				break
 			}
 			select {
-			case toSend := <- t.sendCh:
+			case toSend := <-t.sendCh:
 				messages[count].Buffers[0] = toSend
 				count++
 				bytes += len(toSend)
@@ -143,28 +142,34 @@ func (t *UDPTunnelImpl) send() {
 			}
 		}
 
-		if t.destination.Port == 0 {
+		destination := t.destination.Load()
+		if destination.Port == 0 {
 			Warning.Printf("No destination, skip %v bytes\n", bytes)
 			continue
 		}
 
+		if !t.preConnected {
+			for i := 0; i < count; i++ {
+				messages[i].Addr = destination
+			}
+		}
 		msgSent := 0
 		for msgSent < count {
 			n, err := t.conn.WriteBatch(messages[msgSent:count], 0)
 			if err != nil {
-				Error.Printf("Failed to send to %v, err: %v\n", t.destination, err)
+				Error.Printf("Failed to send to %v, err: %v\n", destination, err)
 				break
 			}
 			msgSent += n
 		}
-		Debug.Printf("sent to %v %d bytes\n", t.destination, bytes)
+		Debug.Printf("sent to %v %d bytes\n", destination, bytes)
 	}
 }
 
 func (t *UDPTunnelImpl) receive() {
 	messages := make([]ipv4.Message, udpRxLength)
 	for i := 0; i < len(messages); i++ {
-		messages[i].Buffers = [][]byte { make([]byte, 2048) }
+		messages[i].Buffers = [][]byte{make([]byte, 2048)}
 		messages[i].N = len(messages[i].Buffers[0])
 	}
 	for {
@@ -174,7 +179,8 @@ func (t *UDPTunnelImpl) receive() {
 			continue
 		}
 
-		if t.handler == nil {
+		handler := t.handler.Load()
+		if handler == nil {
 			Warning.Printf("no receive handler set, ignored %d * N bytes", n)
 			continue
 		}
@@ -182,13 +188,14 @@ func (t *UDPTunnelImpl) receive() {
 		for i := 0; i < n; i++ {
 			msg := &messages[i]
 			remoteAddr := msg.Addr.(*net.UDPAddr)
-			if !equalUDPAddr(remoteAddr, t.destination) {
+			destination := t.destination.Load()
+			if !equalUDPAddr(remoteAddr, destination) {
 				if t.preConnected {
-					Error.Printf("cannot change destination from %v to %v\n", t.destination, remoteAddr)
+					Error.Printf("cannot change destination from %v to %v\n", destination, remoteAddr)
 					break
 				} else {
-					Info.Printf("tunnel destination changed from %v to %v\n", t.destination, remoteAddr)
-					dupUDPAddr(t.destination, remoteAddr)
+					Info.Printf("tunnel destination changed from %v to %v\n", destination, remoteAddr)
+					t.destination.Store(copyUDPAddr(remoteAddr))
 				}
 			}
 			if len(msg.Buffers) != 1 {
@@ -197,7 +204,7 @@ func (t *UDPTunnelImpl) receive() {
 			}
 			received := t.restore(msg.Buffers[0][:msg.N])
 			if received != nil {
-				t.handler(t, received)
+				(*handler)(t, received)
 			}
 
 			Debug.Printf("received from %v %d bytes\n", remoteAddr, msg.N)

@@ -2,23 +2,23 @@ package main
 
 import (
 	"encoding/binary"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 	"net"
 	"time"
 )
 
 type Query struct {
-	ttl int64
-	id uint16
-	srcPort uint16
-	srcIP net.IP
+	ttl      int64
+	id       uint16
+	srcPort  uint16
+	srcIP    net.IP
 	original net.IP
 	replaced net.IP
 }
 
 type QueryList struct {
-	queries []Query
+	queries  []Query
 	queryMap map[uint64]Query
 }
 
@@ -32,7 +32,7 @@ func NewQueryList() *QueryList {
 func toKey(ip net.IP, port, id uint16) uint64 {
 	var ret uint64
 	ret = uint64(binary.BigEndian.Uint32(ip.To4())) << 32
-	ret += uint64(uint32(port) << 16 + uint32(id))
+	ret += uint64(uint32(port)<<16 + uint32(id))
 	return ret
 }
 
@@ -40,7 +40,7 @@ func (ql *QueryList) expire() {
 	now := time.Now().UnixNano()
 	skipped := 0
 	for _, query := range ql.queries {
-		if query.ttl + int64(1 * time.Second) < now {
+		if query.ttl+int64(1*time.Second) < now {
 			skipped++
 			delete(ql.queryMap, toKey(query.srcIP, query.srcPort, query.id))
 		} else {

@@ -6,9 +6,12 @@ func TestDomainAddTest(t *testing.T) {
 
 	trie := NewDomainTrie("")
 
-	tests := []struct { domain string; expect bool } {
-		{ "example.com", false },
-		{ "example.com.", false },
+	tests := []struct {
+		domain string
+		expect bool
+	}{
+		{"example.com", false},
+		{"example.com.", false},
 	}
 
 	for _, test := range tests {
@@ -18,7 +21,7 @@ func TestDomainAddTest(t *testing.T) {
 		}
 	}
 
-	domains := []string {
+	domains := []string{
 		"google.com",
 		"github.com.",
 	}
@@ -27,20 +30,23 @@ func TestDomainAddTest(t *testing.T) {
 		trie.Add(domain)
 	}
 
-	tests = []struct { domain string; expect bool } {
-		{ "google.com", true },
-		{ "google.com.", true },
-		{ "www.google.com", true },
-		{ "www.google.com.hk", false },
-		{ "github.com", true },
-		{ "github.com.", true },
-		{ "www.github.com", true },
-		{ "www.github.com.hk", false },
-		{ ".", true },
-		{ "com", false },
-		{ "com.", false },
-		{ "google", false },
-		{ "google.", false },
+	tests = []struct {
+		domain string
+		expect bool
+	}{
+		{"google.com", true},
+		{"google.com.", true},
+		{"www.google.com", true},
+		{"www.google.com.hk", false},
+		{"github.com", true},
+		{"github.com.", true},
+		{"www.github.com", true},
+		{"www.github.com.hk", false},
+		{".", true},
+		{"com", false},
+		{"com.", false},
+		{"google", false},
+		{"google.", false},
 	}
 
 	for _, test := range tests {
@@ -52,21 +58,24 @@ func TestDomainAddTest(t *testing.T) {
 }
 
 func TestTruncateDomain(t *testing.T) {
-	tests := []struct { domain string; expect string } {
-		{ "google.com", "google.com" },
-		{ "google.com.", "google.com" },
-		{ "www.google.com", "google.com" },
-		{ "www.google.com.hk", "google.com.hk" },
-		{ "github.com", "github.com" },
-		{ "github.com.", "github.com" },
-		{ "www.github.com", "github.com" },
-		{ "www.github.com.hk", "github.com.hk" },
-		{ ".", "" },
-		{ "com", "com" },
-		{ "com.", "com" },
-		{ "co.jp", "co.jp" },
-		{ "google", "google" },
-		{ "google.", "google" },
+	tests := []struct {
+		domain string
+		expect string
+	}{
+		{"google.com", "google.com"},
+		{"google.com.", "google.com"},
+		{"www.google.com", "google.com"},
+		{"www.google.com.hk", "google.com.hk"},
+		{"github.com", "github.com"},
+		{"github.com.", "github.com"},
+		{"www.github.com", "github.com"},
+		{"www.github.com.hk", "github.com.hk"},
+		{".", ""},
+		{"com", "com"},
+		{"com.", "com"},
+		{"co.jp", "co.jp"},
+		{"google", "google"},
+		{"google.", "google"},
 	}
 
 	for _, test := range tests {

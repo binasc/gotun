@@ -2,19 +2,21 @@ package main
 
 import (
 	"bytes"
-	"container/list"
-	"math/rand"
+	"math/rand/v2"
+	"net"
 	"strconv"
 	"testing"
 	"time"
 )
 
 func TestObscureRestore(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
+	rng := rand.New(rand.NewPCG(42, 17))
 	for n := 0; n < 100; n++ {
-		length := rand.Intn(1400) + 1
+		length := rng.IntN(1400) + 1
 		o := make([]byte, length)
-		rand.Read(o)
+		for i := range o {
+			o[i] = byte(rng.Uint32())
+		}
 		tun := &UDPTunnelImpl{}
 		s := tun.restore(tun.obscure(o))
 
@@ -25,44 +27,40 @@ func TestObscureRestore(t *testing.T) {
 }
 
 func TestEcho(t *testing.T) {
-	output := list.New()
+	output := make(chan int, 10)
 	stopCh := make(chan int)
 	handler := func(t Tunnel, b []byte) {
 		v, _ := strconv.Atoi(string(b))
-		output.PushBack(v)
+		output <- v
 		if v < 10 {
-			t.Send([]byte(strconv.Itoa(v+1)))
+			t.Send([]byte(strconv.Itoa(v + 1)))
 		} else {
 			stopCh <- 1
 		}
 	}
 
 	var err error
-	t0, err := UDPListen("127.0.0.1", 11111)
+	t0, err := UDPListen("127.0.0.1", 0)
 	if err != nil {
-		t.Errorf("Failed to listen UDP: %v", err)
+		t.Fatalf("Failed to listen UDP: %v", err)
 	}
 	t0.SetHandler(handler)
-	t1, err := UDPConnect("127.0.0.1", 11111)
+	t1, err := UDPConnect("127.0.0.1", uint16(t0.(*UDPTunnelImpl).conn.LocalAddr().(*net.UDPAddr).Port))
 	if err != nil {
-		t.Errorf("Failed to connect UDP: %v", err)
+		t.Fatalf("Failed to connect UDP: %v", err)
 	}
 	t1.SetHandler(handler)
 
 	t1.Send([]byte("1"))
 
-	_ = <- stopCh
-
-	if output.Len() != 10 {
-		t.Errorf("Want 10 elements but got %d", output.Len())
+	select {
+	case <-stopCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("UDP echo timeout")
 	}
-
-	e := output.Front()
-	for i := 1; i <= 10; i++ {
-		if e.Value != i {
-			t.Errorf("Want %d but got %d", i, e.Value)
+	for want := 1; want <= 10; want++ {
+		if got := <-output; got != want {
+			t.Fatalf("echo %d: got %d", want, got)
 		}
-		e = e.Next()
 	}
 }
-

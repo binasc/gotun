@@ -5,9 +5,9 @@ import (
 )
 
 func PlatformSpecificParams(name string) water.PlatformSpecificParams {
-	return water.PlatformSpecificParams {
-		Name: name,
-		Persist: true,
+	return water.PlatformSpecificParams{
+		Name:       name,
+		Persist:    true,
 		MultiQueue: true,
 	}
 }

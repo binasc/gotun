@@ -10,8 +10,8 @@ func startServer(device TunTap, common, server *ini.Section) {
 		Error.Printf("Failed to start server tunnel: %v\n", err)
 		return
 	}
-	device.SetHandler(func (_ TunTap, content []byte) { svrDeviceReceived(device, tunnel, content) })
-	tunnel.SetHandler(func (_ Tunnel, content []byte) { svrTunnelReceived(device, tunnel, content) })
+	device.SetHandler(func(_ TunTap, content []byte) { svrDeviceReceived(device, tunnel, content) })
+	tunnel.SetHandler(func(_ Tunnel, content []byte) { svrTunnelReceived(device, tunnel, content) })
 
 	//f, err := os.Create("profiling")
 	//if err != nil {

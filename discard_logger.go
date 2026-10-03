@@ -4,7 +4,7 @@ import (
 	"io"
 )
 
-type DiscardLogger struct {}
+type DiscardLogger struct{}
 
 func NewDiscardLogger(out io.Writer, prefix string, flag int) *DiscardLogger {
 	return &DiscardLogger{}

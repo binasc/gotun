@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/fsnotify/fsnotify"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
 	"gopkg.in/ini.v1"
 	"net"
 	"strings"
@@ -12,19 +12,19 @@ import (
 )
 
 type Context struct {
-	global bool
-	blocked atomic.Value
-	blockedIp AddressQueue
-	skippedIp AddressSet
-	queryList *QueryList
-	remoteAddr net.IP
-	localAddr net.IP
+	global      bool
+	blocked     atomic.Value
+	blockedIp   AddressQueue
+	skippedIp   AddressSet
+	queryList   *QueryList
+	remoteAddr  net.IP
+	localAddr   net.IP
 	phantomAddr net.IP
-	fastDNS net.IP
-	cleanDNS net.IP
-	localDNS net.IP
-	tunTap TunTap
-	tunnel Tunnel
+	fastDNS     net.IP
+	cleanDNS    net.IP
+	localDNS    net.IP
+	tunTap      TunTap
+	tunnel      Tunnel
 	chinaIPList ChinaIPList
 }
 
@@ -42,7 +42,7 @@ func startClient(tunTap TunTap, common, client *ini.Section, watcher *fsnotify.W
 
 	ctx := Context{
 		global,
-		atomic.Value {},
+		atomic.Value{},
 		NewAddressQueueWithPersistence("blocked_records.txt"),
 		NewAddressSet(client.Key("skipped_addresses").String()),
 		NewQueryList(),
@@ -67,8 +67,8 @@ func startClient(tunTap TunTap, common, client *ini.Section, watcher *fsnotify.W
 		ctx.blockedFileWatcher(watcher)
 	}()
 
-	tunTap.SetHandler(func (_ TunTap, content []byte) { ctx.cliDeviceReceived(tunTap, tunnel, content) })
-	tunnel.SetHandler(func (_ Tunnel, content []byte) { ctx.cliTunnelReceived(tunTap, tunnel, content) })
+	tunTap.SetHandler(func(_ TunTap, content []byte) { ctx.cliDeviceReceived(tunTap, tunnel, content) })
+	tunnel.SetHandler(func(_ Tunnel, content []byte) { ctx.cliTunnelReceived(tunTap, tunnel, content) })
 }
 
 func (ctx *Context) blockedFileWatcher(watcher *fsnotify.Watcher) {
@@ -78,7 +78,7 @@ func (ctx *Context) blockedFileWatcher(watcher *fsnotify.Watcher) {
 			if !ok {
 				Error.Println("Get watcher.Events chan not ok")
 			}
-			if event.Op & fsnotify.Write == fsnotify.Write {
+			if event.Op&fsnotify.Write == fsnotify.Write {
 				if "blocked.txt" == event.Name || strings.HasSuffix(event.Name, "/blocked.txt") {
 					ctx.blocked.Store(NewDomainTrie("blocked.txt"))
 				}
@@ -154,42 +154,44 @@ func (ctx *Context) isViaTunnel(packet gopacket.Packet) (bool, bool) {
 }
 
 func updateChecksum(packet gopacket.Packet) []byte {
-	networkLayer := packet.NetworkLayer()
+	network := packet.NetworkLayer()
+	header, ok := network.(gopacket.SerializableLayer)
+	if !ok {
+		return packet.Data()
+	}
+	parts := []gopacket.SerializableLayer{header}
+	payload := network.LayerPayload()
 	var err error
-	if networkLayer != nil {
-		switch networkLayer.LayerType() {
-		case layers.LayerTypeIPv4:
-			transportLayer := packet.TransportLayer()
-			if transportLayer != nil {
-				switch transportLayer.LayerType() {
-				case layers.LayerTypeTCP:
-					err = transportLayer.(*layers.TCP).SetNetworkLayerForChecksum(networkLayer.(*layers.IPv4))
-				case layers.LayerTypeUDP:
-					err = transportLayer.(*layers.UDP).SetNetworkLayerForChecksum(networkLayer.(*layers.IPv4))
-				}
-			}
-		case layers.LayerTypeIPv6:
-			icmp := packet.Layer(layers.LayerTypeICMPv6)
-			if icmp != nil {
-				err = icmp.(*layers.ICMPv6).SetNetworkLayerForChecksum(networkLayer)
-			}
+	if transport := packet.TransportLayer(); transport != nil {
+		serializable, ok := transport.(gopacket.SerializableLayer)
+		if !ok {
+			return packet.Data()
 		}
+		switch layer := transport.(type) {
+		case *layers.TCP:
+			err = layer.SetNetworkLayerForChecksum(network)
+		case *layers.UDP:
+			err = layer.SetNetworkLayerForChecksum(network)
+		}
+		parts = append(parts, serializable)
+		payload = transport.LayerPayload()
+	} else if layer := packet.Layer(layers.LayerTypeICMPv6); layer != nil {
+		icmp := layer.(*layers.ICMPv6)
+		err = icmp.SetNetworkLayerForChecksum(network)
+		parts = append(parts, icmp)
+		payload = icmp.LayerPayload()
 	}
 	if err != nil {
-		Error.Printf("something error happen %v\n", err)
+		Error.Printf("checksum setup failed: %v\n", err)
 		return packet.Data()
 	}
-	options := gopacket.SerializeOptions{
-		ComputeChecksums: true,
-		FixLengths: true,
-	}
-	newBuffer := gopacket.NewSerializeBuffer()
-	err = gopacket.SerializePacket(newBuffer, options, packet)
-	if err != nil {
-		Error.Printf("failed to serialize packet: %v\n", err)
+	parts = append(parts, gopacket.Payload(payload))
+	buffer := gopacket.NewSerializeBuffer()
+	if err := gopacket.SerializeLayers(buffer, gopacket.SerializeOptions{FixLengths: true, ComputeChecksums: true}, parts...); err != nil {
+		Error.Printf("checksum serialization failed: %v\n", err)
 		return packet.Data()
 	}
-	return newBuffer.Bytes()
+	return buffer.Bytes()
 }
 
 func (ctx *Context) tryChangeSrc(packet gopacket.Packet) bool {
@@ -215,8 +217,8 @@ func (ctx *Context) tryRestoreDst(packet gopacket.Packet) bool {
 }
 
 var decodeOptions = gopacket.DecodeOptions{
-	Lazy: true,
-	NoCopy: true,
+	Lazy:               true,
+	NoCopy:             true,
 	SkipDecodeRecovery: true,
 }
 
@@ -273,7 +275,7 @@ func (ctx *Context) cliTunnelReceived(device TunTap, _ Tunnel, content []byte) {
 	has, modified := hasIPv4DNSLayer(packet, func(ipv4 *layers.IPv4, dns *layers.DNS) bool {
 		for _, ans := range dns.Answers {
 			if ans.Type == layers.DNSTypeA {
-				ctx.blockedIp.Add(int64(ans.TTL) * time.Second.Milliseconds(), ans.IP, string(ans.Name))
+				ctx.blockedIp.Add(int64(ans.TTL)*time.Second.Milliseconds(), ans.IP, string(ans.Name))
 			}
 		}
 		return ctx.queryList.RestoreDnsSource(dns.ID, packet.TransportLayer(), ipv4)

@@ -8,17 +8,17 @@ import (
 )
 
 func TestPriorityQueueInit(t *testing.T) {
-	var records PriorityQueue = []*Record {
-		{ 3, "", net.IPv4(0, 0, 0, 3) },
-		{ 1, "", net.IPv4(0, 0, 0, 1) },
-		{ 4, "", net.IPv4(0, 0, 0, 4) },
-		{ 1, "", net.IPv4(0, 0, 0, 1) },
-		{ 5, "", net.IPv4(0, 0, 0, 5) },
-		{ 9, "", net.IPv4(0, 0, 0, 9) },
+	var records PriorityQueue = []*Record{
+		{3, "", net.IPv4(0, 0, 0, 3)},
+		{1, "", net.IPv4(0, 0, 0, 1)},
+		{4, "", net.IPv4(0, 0, 0, 4)},
+		{1, "", net.IPv4(0, 0, 0, 1)},
+		{5, "", net.IPv4(0, 0, 0, 5)},
+		{9, "", net.IPv4(0, 0, 0, 9)},
 	}
 	heap.Init(&records)
 
-	for idx, val := range []int64 {1, 1, 3, 4, 5, 9} {
+	for idx, val := range []int64{1, 1, 3, 4, 5, 9} {
 		record := heap.Pop(&records).(*Record)
 		if (*record).ttl != val {
 			t.Errorf("Bad head sorting result, expect %d, but got %d on %dth item", val, records[idx].ttl, idx+1)
@@ -27,19 +27,19 @@ func TestPriorityQueueInit(t *testing.T) {
 }
 
 func TestPriorityQueuePush(t *testing.T) {
-	var records PriorityQueue = []*Record {
-		{ 3, "", net.IPv4(0, 0, 0, 3) },
-		{ 1, "", net.IPv4(0, 0, 0, 1) },
-		{ 4, "", net.IPv4(0, 0, 0, 4) },
-		{ 1, "", net.IPv4(0, 0, 0, 1) },
-		{ 5, "", net.IPv4(0, 0, 0, 5) },
-		{ 9, "", net.IPv4(0, 0, 0, 9) },
+	var records PriorityQueue = []*Record{
+		{3, "", net.IPv4(0, 0, 0, 3)},
+		{1, "", net.IPv4(0, 0, 0, 1)},
+		{4, "", net.IPv4(0, 0, 0, 4)},
+		{1, "", net.IPv4(0, 0, 0, 1)},
+		{5, "", net.IPv4(0, 0, 0, 5)},
+		{9, "", net.IPv4(0, 0, 0, 9)},
 	}
 	heap.Init(&records)
-	heap.Push(&records, &Record {2, "", net.IPv4(0, 0, 0, 2)})
-	heap.Push(&records, &Record {6, "", net.IPv4(0, 0, 0, 6)})
+	heap.Push(&records, &Record{2, "", net.IPv4(0, 0, 0, 2)})
+	heap.Push(&records, &Record{6, "", net.IPv4(0, 0, 0, 6)})
 
-	for idx, val := range []int64 {1, 1, 2, 3, 4, 5, 6, 9} {
+	for idx, val := range []int64{1, 1, 2, 3, 4, 5, 6, 9} {
 		record := heap.Pop(&records).(*Record)
 		if (*record).ttl != val {
 			t.Errorf("Bad head sorting result, expect %d, but got %d on %dth item", val, records[idx].ttl, idx+1)

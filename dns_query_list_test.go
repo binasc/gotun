@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket/layers"
 	"net"
 	"testing"
 )
@@ -13,10 +13,10 @@ func TestChange(t *testing.T) {
 		Protocol: layers.IPProtocolUDP,
 	}
 	udpLayer := layers.UDP{
-		SrcPort:   0,
-		DstPort:   50000,
-		Length:    0,
-		Checksum:  0,
+		SrcPort:  0,
+		DstPort:  50000,
+		Length:   0,
+		Checksum: 0,
 	}
 	server := net.IPv4(8, 8, 8, 8)
 
@@ -35,10 +35,10 @@ func TestRestore(t *testing.T) {
 		Protocol: layers.IPProtocolUDP,
 	}
 	udpRequest := layers.UDP{
-		SrcPort:   0,
-		DstPort:   50000,
-		Length:    0,
-		Checksum:  0,
+		SrcPort:  0,
+		DstPort:  50000,
+		Length:   0,
+		Checksum: 0,
 	}
 	server := net.IPv4(8, 8, 8, 8)
 
@@ -52,10 +52,10 @@ func TestRestore(t *testing.T) {
 		Protocol: layers.IPProtocolUDP,
 	}
 	udpResponse := layers.UDP{
-		SrcPort:   50000,
-		DstPort:   0,
-		Length:    0,
-		Checksum:  0,
+		SrcPort:  50000,
+		DstPort:  0,
+		Length:   0,
+		Checksum: 0,
 	}
 	ql.RestoreDnsSource(201, &udpResponse, &ipLayer)
 

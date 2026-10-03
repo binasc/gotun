@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/google/gopacket/layers"
+	"github.com/gopacket/gopacket/layers"
 	"net"
 )
 
@@ -40,7 +40,7 @@ func UpdateIpv4Checksum(ipv4 *layers.IPv4) {
 	}
 	// Flip all the bits
 	fmt.Println("old", ipv4.Checksum)
-	ipv4.Checksum =  ^uint16(csum)
+	ipv4.Checksum = ^uint16(csum)
 	fmt.Println("new", ipv4.Checksum)
 	binary.BigEndian.PutUint16(bytes[10:], ipv4.Checksum)
 }
