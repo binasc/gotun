@@ -1,3 +1,5 @@
+//go:build linux
+
 package main
 
 import (
@@ -6,50 +8,42 @@ import (
 	"sync/atomic"
 )
 
-type TunTap interface {
+type Tun interface {
 	Send([]byte)
 
-	SetHandler(func(TunTap, []byte))
+	SetHandler(func(Tun, []byte))
 
 	Name() string
 }
 
-type TunTapImpl struct {
+type TunImpl struct {
 	sendCh chan []byte
 
 	device *water.Interface
 
-	handler atomic.Pointer[func(TunTap, []byte)]
+	handler atomic.Pointer[func(Tun, []byte)]
 }
 
-func StartTun(tunName string) (TunTap, error) {
-	return startTunTap(water.TUN, tunName)
-}
-
-func StartTap(tapName string) (TunTap, error) {
-	return startTunTap(water.TAP, tapName)
-}
-
-func startTunTap(deviceType water.DeviceType, name string) (TunTap, error) {
+func StartTun(name string) (Tun, error) {
 	tun, err := water.New(water.Config{
-		DeviceType:             deviceType,
-		PlatformSpecificParams: PlatformSpecificParams(name),
+		DeviceType:             water.TUN,
+		PlatformSpecificParams: tunPlatformParams(name),
 	})
 	if err != nil {
 		return nil, err
 	}
 	Info.Printf("tun device %s created\n", tun.Name())
-	t := TunTapImpl{sendCh: make(chan []byte, 50), device: tun}
+	t := TunImpl{sendCh: make(chan []byte, 50), device: tun}
 	go t.send()
 	go t.receive()
 	return &t, nil
 }
 
-func (t *TunTapImpl) Send(content []byte) {
+func (t *TunImpl) Send(content []byte) {
 	t.sendCh <- copyBytes(content)
 }
 
-func (t *TunTapImpl) send() {
+func (t *TunImpl) send() {
 	for {
 		toSend := <-t.sendCh
 		n, err := t.device.Write(toSend)
@@ -61,7 +55,7 @@ func (t *TunTapImpl) send() {
 	}
 }
 
-func (t *TunTapImpl) SetHandler(handler func(TunTap, []byte)) {
+func (t *TunImpl) SetHandler(handler func(Tun, []byte)) {
 	if handler == nil {
 		t.handler.Store(nil)
 		return
@@ -69,7 +63,7 @@ func (t *TunTapImpl) SetHandler(handler func(TunTap, []byte)) {
 	t.handler.Store(&handler)
 }
 
-func (t *TunTapImpl) receive() {
+func (t *TunImpl) receive() {
 	buf := make([]byte, 1500)
 	for {
 		n, err := t.device.Read(buf)
@@ -88,6 +82,6 @@ func (t *TunTapImpl) receive() {
 	}
 }
 
-func (t *TunTapImpl) Name() string {
+func (t *TunImpl) Name() string {
 	return t.device.Name()
 }

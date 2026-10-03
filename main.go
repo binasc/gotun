@@ -1,3 +1,5 @@
+//go:build linux
+
 package main
 
 import (
@@ -44,20 +46,10 @@ func main() {
 		return
 	}
 
-	var device TunTap
-	mode := cfg.Section("common").Key("mode").String()
 	name := cfg.Section("common").Key("device").String()
-	fmt.Printf("tuntap mode: %s, device: %s\n", mode, name)
-	if mode == "tun" {
-		device, err = StartTun(name)
-	} else if mode == "tap" {
-		device, err = StartTap(name)
-	} else {
-		fmt.Printf("Bad mode: %s\n", mode)
-		return
-	}
+	device, err := StartTun(name)
 	if err != nil {
-		fmt.Printf("Failed to create tun/tap device. %s\n", err)
+		fmt.Printf("Failed to create tun device. %s\n", err)
 		return
 	}
 

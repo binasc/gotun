@@ -1,3 +1,5 @@
+//go:build linux
+
 package main
 
 import (
@@ -16,7 +18,7 @@ type Context struct {
 	chinaIPList ChinaIPList
 }
 
-func startClient(device TunTap, common, client *ini.Section) {
+func startClient(device Tun, common, client *ini.Section) {
 	tunnel, err := NewClientTunnel(common, client)
 	if err != nil {
 		Error.Printf("Failed to create client tunnel: %v\n", err)
@@ -30,7 +32,7 @@ func startClient(device TunTap, common, client *ini.Section) {
 		phantomAddr: net.ParseIP(client.Key("phantom_addr").String()),
 		chinaIPList: NewChinaIPList("china_ip_list.txt"),
 	}
-	device.SetHandler(func(_ TunTap, data []byte) { ctx.cliDeviceReceived(device, tunnel, data) })
+	device.SetHandler(func(_ Tun, data []byte) { ctx.cliDeviceReceived(device, tunnel, data) })
 	tunnel.SetHandler(func(_ Tunnel, data []byte) { device.Send(data) })
 }
 
@@ -123,7 +125,7 @@ var decodeOptions = gopacket.DecodeOptions{
 	SkipDecodeRecovery: true,
 }
 
-func (ctx *Context) cliDeviceReceived(device TunTap, tunnel Tunnel, content []byte) {
+func (ctx *Context) cliDeviceReceived(device Tun, tunnel Tunnel, content []byte) {
 	packet := gopacket.NewPacket(content, layers.LayerTypeIPv4, decodeOptions)
 	if ctx.tryRestoreDst(packet) {
 		device.Send(updateChecksum(packet))

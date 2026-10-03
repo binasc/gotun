@@ -1,10 +1,12 @@
+//go:build linux
+
 package main
 
 import (
 	"github.com/songgao/water"
 )
 
-func PlatformSpecificParams(name string) water.PlatformSpecificParams {
+func tunPlatformParams(name string) water.PlatformSpecificParams {
 	return water.PlatformSpecificParams{
 		Name:       name,
 		Persist:    true,
