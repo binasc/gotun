@@ -40,7 +40,9 @@ func (as *AddressSetImpl) add(ip uint32) {
 }
 
 func (as *AddressSetImpl) Add(ip net.IP) {
-	as.add(as.ipToUint32(ip))
+	if ip = ip.To4(); ip != nil {
+		as.add(binary.BigEndian.Uint32(ip))
+	}
 }
 
 func (as *AddressSetImpl) find(i, j int, target uint32) bool {
@@ -56,15 +58,7 @@ func (as *AddressSetImpl) find(i, j int, target uint32) bool {
 	return as.find(mid+1, j, target)
 }
 
-func (as *AddressSetImpl) ipToUint32(ip net.IP) uint32 {
-	if len(ip) == 16 {
-		return binary.BigEndian.Uint32(ip[12:16])
-	} else {
-		return binary.BigEndian.Uint32(ip)
-	}
-}
-
 func (as *AddressSetImpl) Test(ip net.IP) bool {
-	return as.find(0, len(as.addresses), as.ipToUint32(ip))
-
+	ip = ip.To4()
+	return ip != nil && as.find(0, len(as.addresses), binary.BigEndian.Uint32(ip))
 }

@@ -126,6 +126,17 @@ var decodeOptions = gopacket.DecodeOptions{
 }
 
 func (ctx *Context) cliDeviceReceived(device Tun, tunnel Tunnel, content []byte) {
+	if len(content) == 0 {
+		return
+	}
+	version := content[0] >> 4
+	if version == 6 {
+		tunnel.Send(content)
+		return
+	}
+	if version != 4 {
+		return
+	}
 	packet := gopacket.NewPacket(content, layers.LayerTypeIPv4, decodeOptions)
 	if ctx.tryRestoreDst(packet) {
 		device.Send(updateChecksum(packet))
