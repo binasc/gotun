@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"gopkg.in/ini.v1"
 	"runtime"
 )
@@ -62,15 +61,9 @@ func main() {
 		return
 	}
 
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		fmt.Println("Failed to get file watcher", err)
-	}
-	defer watcher.Close()
-
 	fmt.Printf("Runtime OS: %s\n", runtime.GOOS)
 	if clientMode {
-		startClient(device, cfg.Section("common"), cfg.Section("client"), watcher)
+		startClient(device, cfg.Section("common"), cfg.Section("client"))
 	} else {
 		startServer(device, cfg.Section("common"), cfg.Section("server"))
 	}

@@ -5,7 +5,6 @@ go 1.26.0
 toolchain go1.26.5
 
 require (
-	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gopacket/gopacket v1.7.0
 	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8
 	golang.org/x/net v0.57.0
